@@ -6,6 +6,7 @@
 
   revision    date        notes
   0.0       10/29/2019   initial release
+	0.1				11/02/2019	 version added
 */
 //******************* Defining  external librarys *********************************************************************//
 #include <Wire.h>
@@ -39,9 +40,9 @@ NodeMCU pin #    Arduino IDE pin #
 	D8					15
 */
 
-String header;
 int adc0, adc1, adc2, adc3;							// define each A/D channel each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
 int Vbat, Vchrg, VbatCap;							// Battery (adc2) and Charger voltage (adc3) in mV and battery charge capacity %
+
 const int TrackSize= 6000;							// length of track in centimeters
 const int n = 20; const int Td = 10;				// number of samples measurements and delay in mSec for each A/D channel
 const int Rbat = 1; const int Rchrg=1;				// resistor divider ratios to scale A/D channel to battery and charger
@@ -51,15 +52,13 @@ const int BatLow = 10;								// battery capacity  in % to beging charging
 int Speed;	const int SpeedMax = 1500;				// variable for motor speed and PWM value for maximum speed
 const int MotorAspeed = 5; const int MotorAdir = 0;	// Motor A pins for speed and direction 5=D1, 0=D3
 const int MotorBspeed = 2; const int MotorBdir = 4;	// Motor B pins for speed and direction 2=D4  4=D2
-// Current time
-unsigned long currentTime = millis();
-// Previous time
-unsigned long previousTime = 0; 
-// Define timeout time in milliseconds (example: 2000ms = 2s)
 const long timeoutTime = 2000;
+
+String header;														//web server variables and state machine
+unsigned long currentTime = millis();
+unsigned long previousTime = 0;
 String stateAspeed = "off";
 String stateAdir = "cw";
-
 WiFiServer server(80);
 
 
@@ -72,6 +71,7 @@ void setup() {
 	while (!Serial);                  // wait for serial port to connect. Needed for native USB port only
 	pinMode(MotorAspeed, OUTPUT); pinMode(MotorAdir, OUTPUT);
 	pinMode(MotorBspeed, OUTPUT); pinMode(MotorBdir, OUTPUT);
+
   // Connect to Wi-Fi network with SSID and password
   Serial.print("Connecting to ");
   Serial.println(ssid);
@@ -87,6 +87,9 @@ void setup() {
   Serial.println(WiFi.localIP());
   server.begin();
 }
+
+
+
 
 void loop() {
 
@@ -111,7 +114,7 @@ void loop() {
     currentTime = millis();
     previousTime = currentTime;
     while (client.connected() && currentTime - previousTime <= timeoutTime) { // loop while the client's connected
-      currentTime = millis();         
+      currentTime = millis();
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
         Serial.write(c);                    // print it out the serial monitor
@@ -126,7 +129,7 @@ void loop() {
             client.println("Content-type:text/html");
             client.println("Connection: close");
             client.println();
-                       
+
             // turns the direction CW versus CCW
             if (header.indexOf("GET /A/cw") >= 0) {
               Serial.println("MotorAdir CW");
@@ -145,29 +148,29 @@ void loop() {
               stateAspeed = "off";
               analogWrite(MotorAspeed, 0);
             }
-            
+
             // Display the HTML web page
             client.println("<!DOCTYPE html><html>");
             client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
             client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
+            // CSS to style the on/off buttons
             // Feel free to change the background-color and font-size attributes to fit your preferences
             client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
             client.println(".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
             client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
             client.println(".button2 {background-color: #77878A;}</style></head>");
-            
+
             // Web Page Heading
             client.println("<body><h1>Lego Train Web Server</h1>");
-            
-            // Display current state, and ON/OFF for A  
+
+            // Display current state, and ON/OFF for A
             client.println("<p>Motor A - Direction " + stateAdir + "</p>");
             if (stateAdir=="cw") {
               client.println("<p><a href=\"/A/ccw\"><button class=\"button\">CCW</button></a></p>");
             } else {
               client.println("<p><a href=\"/A/cw\"><button class=\"button button2\">CW</button></a></p>");
-            } 
-               
+            }
+
             client.println("<p>Motor A - Speed " + stateAspeed + "</p>");
             if (stateAspeed=="off") {
               client.println("<p><a href=\"/A/on\"><button class=\"button\">ON</button></a></p>");
@@ -179,7 +182,7 @@ void loop() {
             //client.println("<p>Channel A2: " + adc2);
             //client.println("Channel A3: " + adc3 + "</p>");
             client.println("</body></html>");
-            
+
             // The HTTP response ends with another blank line
             client.println();
             // Break out of the while loop
@@ -226,7 +229,7 @@ void ReadVolts() {
 		adc3 = adc3 + ads.readADC_SingleEnded(3);delay(Td);
 	}
 	adc0 = adc0 / n;  adc1 = adc1 / n;  adc2 = adc2 / n;  adc3 = adc3 / n;
-//	Vbat = Rbat * adc2; Vchrg = Rchrg * adc3;				// using resistor divider ratios, convert A/D voltages to battery and charger voltages  	   	
+//	Vbat = Rbat * adc2; Vchrg = Rchrg * adc3;				// using resistor divider ratios, convert A/D voltages to battery and charger voltages
 //	VbatCap = 100* (Vbat - VbatDchrg) / (VbatChrg-VbatDchrg);	// calculate battery charge capacity in percent
 }
 
