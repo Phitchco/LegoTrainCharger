@@ -16,15 +16,20 @@
 #include <ESP8266WiFi.h>
 #include <Adafruit_ADS1015.h>
 
+// config setup
 #ifndef STASSID
-#define STASSID "unevilnetwork"
-#define STAPSK  "familylaundry"
+#define STASSID ""
+#define STAPSK  ""
+#define STA_WEB_SERVER_ON 1
+#define STA_SERIAL_DEBUG_ON 1
 #endif
+
 
 //******************* Define variable names and constants ************************************************************//
 const char* ssid = STASSID;
 const char* password = STAPSK;
-
+const int web_server_on = STA_WEB_SERVER_ON;
+const int serial_debug = STA_SERIAL_DEBUG_ON;
 Adafruit_ADS1115 ads;  // Using the ADS1115 16-bit 4 channel A/D converter
 
 /*
@@ -52,7 +57,7 @@ const int BatLow = 10;								// battery capacity  in % to beging charging
 int Speed;	const int SpeedMax = 1500;				// variable for motor speed and PWM value for maximum speed
 const int MotorAspeed = 5; const int MotorAdir = 0;	// Motor A pins for speed and direction 5=D1, 0=D3
 const int MotorBspeed = 2; const int MotorBdir = 4;	// Motor B pins for speed and direction 2=D4  4=D2
-const long timeoutTime = 2000;
+const long timeoutTime = 1200;
 
 String header;														//web server variables and state machine
 unsigned long currentTime = millis();
@@ -64,7 +69,7 @@ WiFiServer server(80);
 
 
 void setup() {
-	Wire.begin(D6, D5);							// Wire.begin([SDA-Pin],[SCL-Pin]);
+	//Wire.begin(D6, D5);							// Wire.begin([SDA-Pin],[SCL-Pin]);
 	ads.begin();
 	Serial.begin(115200);
 	pinMode(LED_BUILTIN, OUTPUT);     // Initialize the LED_BUILTIN pin as an output
@@ -73,8 +78,8 @@ void setup() {
 	pinMode(MotorBspeed, OUTPUT); pinMode(MotorBdir, OUTPUT);
 
   // Connect to Wi-Fi network with SSID and password
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.print( "Connecting to ");
+	Serial.print(ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(250);
@@ -89,27 +94,33 @@ void setup() {
 }
 
 
-
-
 void loop() {
-
+	// pseudo code TODO
+	// read the volts of the battery
+	// if volts is high
+	// 			operate train (what's our speed and direction)
+	// else
+	//			do charge routine
+	// webserver handle loop (display data and buttons to speed/directly and charge command)
+	// ideas for hardware things --> led that has charge and instruction status (color?)?
 
 	ReadVolts();									// calculates state of charge of battery and voltages of battery and charger in mV
-//	MotorDrive();
-//	if (VbatCap <= BatLow) { ChargeBatt(); }		// if battery capacity is low, goto charger
-//	Serial.print("AIN0: "); Serial.println(adc0);
-//	Serial.print("AIN1: "); Serial.println(adc1);
-  if (MotorAspeed == 512) {
-    Serial.println("MotorAspeed is 512");
-  }
-	Serial.print("Channel A2: "); Serial.print(adc2);
-	Serial.print(" Channel A3: "); Serial.println(adc3);
-//	Serial.print(Vbat); Serial.print(" "); Serial.print(Vchrg);Serial.print(" ");Serial.print(VbatCap);
-//	Serial.println(" ");
+	//	MotorDrive();
+	//	if (VbatCap <= BatLow) { ChargeBatt(); }		// if battery capacity is low, goto charger
+	//	Serial.print("AIN0: "); Serial.println(adc0);
+	//	Serial.print("AIN1: "); Serial.println(adc1);
+
+	if (serial_debug) {
+		Serial.print("Channel A2: "); Serial.print(adc2);
+		Serial.print(" Channel A3: "); Serial.println(adc3);
+	}
+	//	Serial.print(Vbat); Serial.print(" "); Serial.print(Vchrg);Serial.print(" ");Serial.print(VbatCap);
+	//	Serial.println(" ");
+
   WiFiClient client = server.available();   // Listen for incoming clients
 
   if (client) {                             // If a new client connects,
-    Serial.println("New Client.");          // print a message out in the serial port
+    if (serial_debug) { Serial.println("New Client.");}          // print a message out in the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
     currentTime = millis();
     previousTime = currentTime;
@@ -117,7 +128,6 @@ void loop() {
       currentTime = millis();
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
         header += c;
         if (c == '\n') {                    // if the byte is a newline character
           // if the current line is blank, you got two newline characters in a row.
@@ -132,19 +142,19 @@ void loop() {
 
             // turns the direction CW versus CCW
             if (header.indexOf("GET /A/cw") >= 0) {
-              Serial.println("MotorAdir CW");
+              if (serial_debug) { Serial.println("MotorAdir CW"); }
               stateAdir = "cw";
               digitalWrite(MotorAdir, HIGH);
             } else if (header.indexOf("GET /A/ccw") >= 0) {
-              Serial.println("MotorAdir CCW");
+              if (serial_debug) { Serial.println("MotorAdir CCW"); }
               stateAdir = "ccw";
               digitalWrite(MotorAdir, LOW);
             } else if (header.indexOf("GET /A/on") >= 0) {
-              Serial.println("MotorA On");
+              if (serial_debug) { Serial.println("MotorA On"); }
               stateAspeed = "on";
               analogWrite(MotorAspeed, 512);
             } else if (header.indexOf("GET /A/off") >= 0) {
-              Serial.println("MotorA off");
+              if (serial_debug) { Serial.println("MotorA off"); }
               stateAspeed = "off";
               analogWrite(MotorAspeed, 0);
             }
@@ -156,36 +166,41 @@ void loop() {
             // CSS to style the on/off buttons
             // Feel free to change the background-color and font-size attributes to fit your preferences
             client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
+            client.println(".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px; text-decoration: none;");
             client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-            client.println(".button2 {background-color: #77878A;}</style></head>");
+						client.println(".cw {background-color: #d4ac0d} .ccw {background-color: #9b59b6}");
+						client.println(".on {background-color: #27ae60} .off {background-color: #e74c3c}");
+            client.println(".light {background-color: #77878A;}</style></head>");
 
             // Web Page Heading
-            client.println("<body><h1>Lego Train Web Server</h1>");
+            client.println("<body><h1>Lego Train Control <a href='/' class='button'><span>&#x21bb;</span></a></h1>");
 
             // Display current state, and ON/OFF for A
-            client.println("<p>Motor A - Direction " + stateAdir + "</p>");
+            client.println("<p>Motor A - Direction <b>" + stateAdir + "</b></p>");
             if (stateAdir=="cw") {
-              client.println("<p><a href=\"/A/ccw\"><button class=\"button\">CCW</button></a></p>");
+              client.println("<p><a href=\"/A/ccw\"><button class=\"button ccw\">CCW</button></a></p>");
             } else {
-              client.println("<p><a href=\"/A/cw\"><button class=\"button button2\">CW</button></a></p>");
+              client.println("<p><a href=\"/A/cw\"><button class=\"button\ cw\">CW</button></a></p>");
             }
 
-            client.println("<p>Motor A - Speed " + stateAspeed + "</p>");
+            client.println("<p>Motor A - Speed <b>" + stateAspeed + "</b></p>");
             if (stateAspeed=="off") {
-              client.println("<p><a href=\"/A/on\"><button class=\"button\">ON</button></a></p>");
+              client.println("<p><a href=\"/A/on\"><button class=\"button light\">ON</button></a></p>");
             } else {
-              client.println("<p><a href=\"/A/off\"><button class=\"button button2\">OFF</button></a></p>");
+              client.println("<p><a href=\"/A/off\"><button class=\"button\">OFF</button></a></p>");
             }
 
-            // TODO print the adc2 and adc3 bits
-            //client.println("<p>Channel A2: " + adc2);
-            //client.println("Channel A3: " + adc3 + "</p>");
-            client.println("</body></html>");
+						// TODO: add slider or some method to change speed
 
-            // The HTTP response ends with another blank line
+            client.println("<table style='margin: 0px auto'><tr><td>Channel A2:</td><td>");
+						client.println(adc2);
+						client.println("</td></tr>");
+						client.println("<tr><td>Channel A3:</td><td>");
+						client.println(adc3);
+						client.println("</td></tr></table>");
+
+            client.println("</body></html>");
             client.println();
-            // Break out of the while loop
             break;
           } else { // if you got a newline, then clear currentLine
             currentLine = "";
@@ -195,33 +210,24 @@ void loop() {
         }
       }
     }
-    // Clear the header variable
     header = "";
-    // Close the connection
     client.stop();
-    Serial.println("Client disconnected.");
-    Serial.println("");
   }
-  Serial.println("State A dir:   " + stateAdir + " StateAspeed " + stateAspeed);
-  Serial.print("Channel A2: "); Serial.print(adc2);
-  Serial.println("");
-  Serial.println("");
-
 }
 
-void ReadVolts() {
 
+void ReadVolts() {
 	// measures voltage applied to each channel or A/D converter: adc0, adc1, adc2, adc3
 	// each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
 	// to improve the accuracy of each analog channel read,
 	// a number of samples are taken, summed and averaged
 	adc0 = 0;  adc1 = 0;  adc2 = 0;  adc3 = 0;				//initially set read voltage to zero
-//	for (int i = 0; i <= n; i++) {
-//		adc0 = adc0 + ads.readADC_SingleEnded(0); delay(Td);
-//	}
-//	for (int i = 0; i <= n; i++) {
-//		adc1 = adc1 + ads.readADC_SingleEnded(1);delay(Td);
-//	}
+	//	for (int i = 0; i <= n; i++) {
+	//		adc0 = adc0 + ads.readADC_SingleEnded(0); delay(Td);
+	//	}
+	//	for (int i = 0; i <= n; i++) {
+	//		adc1 = adc1 + ads.readADC_SingleEnded(1);delay(Td);
+	//	}
 	for (int i = 0; i <= n; i++) {
 		adc2 = adc2 + ads.readADC_SingleEnded(2);delay(Td);
 	}
@@ -229,9 +235,10 @@ void ReadVolts() {
 		adc3 = adc3 + ads.readADC_SingleEnded(3);delay(Td);
 	}
 	adc0 = adc0 / n;  adc1 = adc1 / n;  adc2 = adc2 / n;  adc3 = adc3 / n;
-//	Vbat = Rbat * adc2; Vchrg = Rchrg * adc3;				// using resistor divider ratios, convert A/D voltages to battery and charger voltages
-//	VbatCap = 100* (Vbat - VbatDchrg) / (VbatChrg-VbatDchrg);	// calculate battery charge capacity in percent
+	//	Vbat = Rbat * adc2; Vchrg = Rchrg * adc3;				// using resistor divider ratios, convert A/D voltages to battery and charger voltages
+	//	VbatCap = 100* (Vbat - VbatDchrg) / (VbatChrg-VbatDchrg);	// calculate battery charge capacity in percent
 }
+
 
 void ChargeBatt() {
 	// set motor speed to 50% forward
@@ -240,29 +247,30 @@ void ChargeBatt() {
 	// when charger voltage has peaked set motor speed to 5% and reverse
 }
 
+
 void MotorDrive () {
 	digitalWrite(MotorAdir, HIGH);
 	Serial.println("CW motor speed ramp up ");
-//	Serial.println(Speed);
+	//	Serial.println(Speed);
 	for (Speed = 0; Speed <= SpeedMax; Speed += 10) {
-	analogWrite(MotorAspeed, Speed);
-}
-Serial.println("CW motor speed ramp down ");
-//Serial.println(Speed);
-for (Speed = SpeedMax; Speed >= 0; Speed -= 10) {
-	analogWrite(MotorAspeed, Speed);
-}
-digitalWrite(MotorAdir, LOW);
-Serial.println("CCW motor speed ramp up ");
-//Serial.println(Speed);
-for (Speed = 0; Speed <= SpeedMax; Speed += 10) {
-	analogWrite(MotorAspeed, Speed);
-}
-Serial.println("CCW motor speed ramp down ");
-//Serial.println(Speed);
-for (Speed = SpeedMax; Speed >= 0; Speed -= 10) {
-	analogWrite(MotorAspeed, Speed);
-}
+		analogWrite(MotorAspeed, Speed);
+	}
+	Serial.println("CW motor speed ramp down ");
+	//Serial.println(Speed);
+	for (Speed = SpeedMax; Speed >= 0; Speed -= 10) {
+		analogWrite(MotorAspeed, Speed);
+	}
+	digitalWrite(MotorAdir, LOW);
+	Serial.println("CCW motor speed ramp up ");
+	//Serial.println(Speed);
+	for (Speed = 0; Speed <= SpeedMax; Speed += 10) {
+		analogWrite(MotorAspeed, Speed);
+	}
+	Serial.println("CCW motor speed ramp down ");
+	//Serial.println(Speed);
+	for (Speed = SpeedMax; Speed >= 0; Speed -= 10) {
+		analogWrite(MotorAspeed, Speed);
+	}
 }
 
 void SmartCharge() {
