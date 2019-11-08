@@ -7,6 +7,7 @@
   revision    date        notes
   0.0       10/29/2019   initial release
   0.1       11/02/2019   version added
+  0.2       11/07/2019   added ParknCharge clean up, added ADC conversion factors
 */
 //******************* Defining  external librarys *********************************************************************//
 #include <Wire.h>
