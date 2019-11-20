@@ -46,14 +46,13 @@ Adafruit_ADS1115 ads(0x48);
   D8          15
 */
 
-int16_t adc0,  adc1, adc2, adc3;                         // define each A/D channel each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
+int16_t adc0,  adc1, adc2, adc3;                      // define each A/D channel each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
 float AD0, AD1, AD2, AD3;
-float VbatPcent, Ichrg, Idelta, Imax;                 // Battery voltage, Percent battery charge, charger current, reference current, and present PWM motor speed
-int Vbat, Vchrg, Vmax, Speed, Vdelta;                                 // calculated charger voltage
-const int Izero = 60; const float M = 1.1; // constants
+float Ichrg, Idelta, Imax;                           // charger current, change in charging current, temp max charge current
+int Vbat, Vchrg, VbatPcent, Speed, Vdelta;            // Battery volts, Charger voltage, Battery charge percent, motor speed, charger battery voltage delta
+const int Izero = 60; const float M = 1.1;            // constants
 float Pcent = 15;
 const int Track = 6000;                             // length of track in centimeters
-const int Level_1 = 50;                             // maximum mA difference between current measurements during steady state
 const int n = 10; const int Td = 5;                // number of samples measurements and delay in mSec for each A/D channel
 const float Rbat = 4.4002 ; const float Ramp = 1.45; // resistor divider ratios to scale A/D channel to battery and charger
 const float Rchrg = 4.4277;                         // voltage divider ratio to scale A/D channel to charger voltage
@@ -63,7 +62,6 @@ const int BatLow = 10;                              // battery SOC to beging cha
 const int BatHigh = 95;                             // battery SOC to end charging
 const int SpeedMax = 1048;                          // PWM value for motor speed corresponding to 100% speed
 const int Slow1 = 900;                              // PWM value for motor speed to coarse locate charger loop
-const int Slow2 = 250;                              // PWM value for motor speed to fine locate charger loop
 const int SpeedMin = 300;                            // PWM value for motor speed corresponding to 0% speed
 const int ChrgEn = 13;                              // pin to enable wireless charger, must be high charge battery and see current
 const int N1 = 15; const int N2 = 5;                // factors used in ChargePark to check measured current to reference current ratio
@@ -71,8 +69,7 @@ const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed an
 const int MotorBspeed = 2; const int MotorBdir = 4; // Motor B pins for speed and direction 2=D4  4=D2
 const long timeoutTime = 1200;
 char ChrgState; char CaseWas;		                    // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
-bool Charging;                                      // name to say that train is charging
-bool Parked = LOW;                                  // variable to hold parked position
+bool Parked;                                        // variable to hold parked position
 bool Dir;
 
 String header;                                      //web server variables and state machine
@@ -121,20 +118,19 @@ void loop() {
   // do charge routine
   // webserver handle loop (display data and buttons to speed/directly and charge command)
   // ideas for hardware things --> led that has charge and instruction status (color?)?
+
      digitalWrite(ChrgEn, LOW);
      ReadVolts();
-     if (VbatPcent<=75){ParknCharge();}
+     if (VbatPcent<=92){ParknCharge();Parked=1;}
      MotorDrive(); 
       
-//   ParknCharge();
- 
 
   if (serial_debug) {
 //    Serial.print("Channel A0: "); Serial.print(adc0);
-    Serial.print(" Channel A1: "); Serial.print(adc1);
-    Serial.print(" Channel A2: "); Serial.print(adc2);
-    Serial.print(" Channel A3: "); Serial.println(adc3);
-    Serial.print("Charger current of "); Serial.print(Ichrg); Serial.println("mA");
+//    Serial.print(" Channel A1: "); Serial.print(adc1);
+//    Serial.print(" Channel A2: "); Serial.print(adc2);
+//    Serial.print(" Channel A3: "); Serial.println(adc3);
+//    Serial.print("Charger current of "); Serial.print(Ichrg); Serial.println("mA");
     Serial.print("Charger voltage of "); Serial.print(Vchrg);
     Serial.print(" Battery volts of "); Serial.print(Vbat);
     Serial.print("mV and "); Serial.print(VbatPcent); Serial.println("%");

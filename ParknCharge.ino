@@ -5,11 +5,12 @@ int ParknCharge() {
   digitalWrite(D7, HIGH);                               // enable wireless receiver connection to battery charger
   ReadVolts();
   Imax = Ichrg;
-  do {
+  while (Parked==1) {
     ReadVolts();
     Vdelta = Vchrg - Vbat; Idelta = Ichrg - Imax;
     Serial.println();
-    Serial.print("Ichrg: "); Serial.print(Ichrg);
+    Serial.print("Parked= ");Serial.print(Parked);
+    Serial.print(" Ichrg: "); Serial.print(Ichrg);
     Serial.print(" Imax: "); Serial.print(Imax);
     Serial.print(" Idelta: "); Serial.print(Idelta);
     Serial.print(" Charger: "); Serial.print(Vchrg);
@@ -39,10 +40,12 @@ int ParknCharge() {
     switch (ChrgState) {
 
       case 'a': {
-          Speed = 0; Parked = LOW;
-          Serial.print("on loop, stopped Battery: ");
+          Speed = 0;
+          Serial.print("on loop stopped, charging, battery at ");
           Serial.print(VbatPcent);Serial.println("%");
-          if (VbatPcent>=95){
+          if (VbatPcent>=98){
+            Parked=0;
+            Serial.print("Parked= ");Serial.println(Parked);
           }
         }
         break;
@@ -80,8 +83,6 @@ int ParknCharge() {
     Serial.print("  ");
     Serial.print("Speed: "); Serial.println(Speed);
     analogWrite(MotorAspeed, Speed);
-    ChrgState = 'z';
-    delay(00);
     Imax = Ichrg;
-  } while (Parked = HIGH);
+  }
 }
