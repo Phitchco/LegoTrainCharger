@@ -5,11 +5,11 @@ int ParknCharge() {
   digitalWrite(D7, HIGH);                               // enable wireless receiver connection to battery charger
   ReadVolts();
   Imax = Ichrg;
-  while (Parked==1) {
+  while (Charged==0) {
     ReadVolts();
     Vdelta = Vchrg - Vbat; Idelta = Ichrg - Imax;
     Serial.println();
-    Serial.print("Parked= ");Serial.print(Parked);
+    Serial.print("Charged= ");Serial.print(Charged);
     Serial.print(" Ichrg: "); Serial.print(Ichrg);
     Serial.print(" Imax: "); Serial.print(Imax);
     Serial.print(" Idelta: "); Serial.print(Idelta);
@@ -43,18 +43,17 @@ int ParknCharge() {
           Speed = 0;
           Serial.print("on loop stopped, charging, battery at ");
           Serial.print(VbatPcent);Serial.println("%");
-          if (VbatPcent>=98){
-            Parked=0;
-            Serial.print("Parked= ");Serial.println(Parked);
+          if (VbatPcent>=FullCharge){
+            Charged=HIGH;
+            Serial.print("Charge= ");Serial.println(Charged);
           }
         }
         break;
 
       case 'b': {
           if (Speed >= SpeedMax) {Speed = SpeedMax; }
-          else {Speed = 2 * Speed;}
-          if(Speed=0){Speed=SpeedMax;}
-          Serial.println("far from loop");
+          if(Speed<SpeedMin){Speed=SpeedMax;}
+          Serial.print(Speed);Serial.println(" far from loop");
         }
         break;
 
