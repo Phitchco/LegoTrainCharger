@@ -53,24 +53,22 @@ int Vbat, Vchrg, Speed, Vdelta;                    // Battery volts, Charger vol
 int VbatPcent;
 const int Izero = 60; const float M = 1.1;            // constants
 float Pcent = 15;
-const int FullCharge=98;                            // percent amount considered fully charged
 const int Track = 6000;                             // length of track in centimeters
 const int n = 10; const int Td = 5;                // number of samples measurements and delay in mSec for each A/D channel
 const float Rbat = 4.4002 ; const float Ramp = 1.45; // resistor divider ratios to scale A/D channel to battery and charger
 const float Rchrg = 4.4277;                         // voltage divider ratio to scale A/D channel to charger voltage
 const int VbatMax = 12200;                          // 100% state of charge battery voltage in mV (3 * 4.1)
 const int VbatMin = 10000;                          // 0% state of charge battery voltage in mV (3 * 3.333)
-const int BatLow = 10;                              // battery SOC to beging charging
-const int BatHigh = 95;                             // battery SOC to end charging
+const int FullCharge=97;                            // percent amount considered fully charged
+const int LowCharge=60;
 const int SpeedMax = 1100;                          // PWM value for motor speed corresponding to 100% speed
 const int Slow1 = 900;                              // PWM value for motor speed to coarse locate charger loop
 const int SpeedMin = 200;                            // PWM value for motor speed corresponding to 0% speed
 const int ChrgEn = 13;                              // pin to enable wireless charger, must be high charge battery and see current
-const int N1 = 15; const int N2 = 5;                // factors used in ChargePark to check measured current to reference current ratio
 const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed and direction 5=D1, 0=D3
 const int MotorBspeed = 2; const int MotorBdir = 4; // Motor B pins for speed and direction 2=D4  4=D2
 const long timeoutTime = 1200;
-char ChrgState; char CaseWas;		                    // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
+char ChrgState;                                      // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
 bool Charged;                                        // variable to hold parked position
 bool Dir;
 
@@ -133,7 +131,7 @@ void loop() {
     Serial.print(" @ "); Serial.print(VbatPcent); Serial.println("%");
   }
 
-    if (VbatPcent < 85){ Serial.println(VbatPcent);Charged=0;ParknCharge(); }
+    if (VbatPcent < LowCharge){ Serial.println(VbatPcent);Charged=0;ParknCharge(); }
      MotorDrive();
 
   WiFiClient client = server.available();   // Listen for incoming clients

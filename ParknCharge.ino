@@ -5,7 +5,7 @@ int ParknCharge() {
   digitalWrite(D7, HIGH);                               // enable wireless receiver connection to battery charger
   ReadVolts();
   Imax = Ichrg;
-  while (Charged==0) {
+  while (Charged==LOW) {
     ReadVolts();
     Vdelta = Vchrg - Vbat; Idelta = Ichrg - Imax;
     Serial.println();
