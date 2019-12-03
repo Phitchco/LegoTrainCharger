@@ -18,4 +18,5 @@ int ReadVolts() {
   }
   Ichrg = (AD1* .1875 / Ramp) /n ; Vbat = Rbat * AD3*.1875 /n ; Vchrg = Rchrg * AD2*.1875 /n;       // using resistor divider ratios, convert A/D voltages to battery and charger voltages
   VbatPcent = 100 * (Vbat - VbatMin) / (VbatMax - VbatMin);                     // calculate battery charge capacity in percent
+  
 }

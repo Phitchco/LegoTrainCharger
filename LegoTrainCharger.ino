@@ -21,7 +21,7 @@
 #ifndef STASSID
 #define STASSID "unevilnetwork"
 #define STAPSK  "familylaundry"
-#define STA_WEB_SERVER_ON 0
+#define STA_WEB_SERVER_ON 1
 #define STA_SERIAL_DEBUG_ON 1
 #endif
 
@@ -45,6 +45,9 @@ Adafruit_ADS1115 ads(0x48);
   D7          13
   D8          15
 */
+const int ChrgEn = 13;                              // pin to enable wireless charger, must be high charge battery and see current
+const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed and direction 5=D1, 0=D3
+const int MotorBspeed = 2; const int MotorBdir = 4; // Motor B pins for speed and direction 2=D4  4=D2
 
 int16_t adc0,  adc1, adc2, adc3;                      // define each A/D channel each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
 float AD0, AD1, AD2, AD3;
@@ -54,19 +57,16 @@ int VbatPcent;
 const int Izero = 60; const float M = 1.1;            // constants
 float Pcent = 15;
 const int Track = 6000;                             // length of track in centimeters
-const int n = 10; const int Td = 5;                // number of samples measurements and delay in mSec for each A/D channel
+const int n = 5; const int Td = 5;                   // number of samples measurements and delay in mSec for each A/D channel
 const float Rbat = 4.4002 ; const float Ramp = 1.45; // resistor divider ratios to scale A/D channel to battery and charger
 const float Rchrg = 4.4277;                         // voltage divider ratio to scale A/D channel to charger voltage
-const int VbatMax = 12200;                          // 100% state of charge battery voltage in mV (3 * 4.1)
+const int VbatMax = 11800;                          // 100% state of charge battery voltage in mV (3 * 4.1)
 const int VbatMin = 10000;                          // 0% state of charge battery voltage in mV (3 * 3.333)
-const int FullCharge=97;                            // percent amount considered fully charged
-const int LowCharge=60;
-const int SpeedMax = 1100;                          // PWM value for motor speed corresponding to 100% speed
-const int Slow1 = 900;                              // PWM value for motor speed to coarse locate charger loop
-const int SpeedMin = 200;                            // PWM value for motor speed corresponding to 0% speed
-const int ChrgEn = 13;                              // pin to enable wireless charger, must be high charge battery and see current
-const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed and direction 5=D1, 0=D3
-const int MotorBspeed = 2; const int MotorBdir = 4; // Motor B pins for speed and direction 2=D4  4=D2
+const int FullCharge=99;                            // percent amount considered fully charged
+const int LowCharge=50;
+const int SpeedMax = 525;                           // PWM value for motor speed corresponding to 100% speed
+const int SpeedMin = 500;                            // PWM value for motor speed corresponding to 0% speed
+const int Slow1 = 250;                              // PWM value for motor speed to coarse locate charger loop
 const long timeoutTime = 1200;
 char ChrgState;                                      // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
 bool Charged;                                        // variable to hold parked position
@@ -116,23 +116,27 @@ void loop() {
   // webserver handle loop (display data and buttons to speed/directly and charge command)
   // ideas for hardware things --> led that has charge and instruction status (color?)?
 
-     digitalWrite(ChrgEn, LOW);
-     ReadVolts();
-    
-
   if (serial_debug) {
-//    Serial.print("Channel A0: "); Serial.print(adc0);
-//    Serial.print(" Channel A1: "); Serial.print(adc1);
-//    Serial.print(" Channel A2: "); Serial.print(adc2);
-//    Serial.print(" Channel A3: "); Serial.println(adc3);
-//    Serial.print("Charger current of "); Serial.print(Ichrg); Serial.println("mA");
+    Serial.print("Channel A0: "); Serial.print(adc0);
+    Serial.print(" Channel A1: "); Serial.print(adc1);
+    Serial.print(" Channel A2: "); Serial.print(adc2);
+    Serial.print(" Channel A3: "); Serial.println(adc3);
+    Serial.print("Charger current of "); Serial.print(Ichrg); Serial.println("mA");
     Serial.print("Charger voltage: "); Serial.print(Vchrg);
     Serial.print(" Battery voltage: "); Serial.print(Vbat);
-    Serial.print(" @ "); Serial.print(VbatPcent); Serial.println("%");
+    Serial.print("mV @ "); Serial.print(VbatPcent); Serial.println("%");
   }
 
-    if (VbatPcent < LowCharge){ Serial.println(VbatPcent);Charged=0;ParknCharge(); }
-     MotorDrive();
+     digitalWrite(ChrgEn, LOW);
+     TrackTest(); 
+     ReadVolts();
+    if (VbatPcent <=0){ ReadVolts();}
+    if (VbatPcent < LowCharge){
+    Serial.println(VbatPcent);
+     Charged=0;
+     ParknCharge();
+     }
+//     MotorDrive();
 
   WiFiClient client = server.available();   // Listen for incoming clients
   if (client) {                             // If a new client connects,
@@ -223,11 +227,13 @@ void loop() {
 
             // TODO: add slider or some method to change speed
 
-            client.println("<table style='margin: 0px auto'><tr><td>Channel A2:</td><td>");
-            client.println(adc2);
+            client.println("<table style='margin: 0px auto'><tr><td>Battery milliVolts:</td><td>");
+            client.println(Vbat);
             client.println("</td></tr>");
-            client.println("<tr><td>Channel A3:</td><td>");
-            client.println(adc3);
+            client.println("<tr><td>Train Speed of:</td><td>");
+            client.println(Speed);
+            client.println("<tr><td>Battery Charge % of:</td><td>");
+            client.println(VbatPcent);
             client.println("</td></tr></table>");
 
             client.println("</body></html>");
