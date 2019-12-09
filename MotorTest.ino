@@ -5,7 +5,7 @@ void MotorDrive() {
   Serial.println(Speed);
   for (Speed = SpeedMin; Speed <= SpeedMax; Speed += 5) {
   delay(20);analogWrite(MotorAspeed, Speed);}
-  delay(5000);
+  delay(1000);
   Serial.println("CW motor speed ramp down ");
   Serial.println(Speed);
   for (Speed = SpeedMax; Speed >= SpeedMin; Speed -= 5) {

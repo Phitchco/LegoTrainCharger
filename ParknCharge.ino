@@ -1,7 +1,7 @@
 int ParknCharge() {
   Serial.println("entering park and charge");
-  Speed = SpeedMax;
-  analogWrite(MotorAspeed, Speed);
+//  Speed = SpeedMax;
+//  analogWrite(MotorAspeed, Speed);
   digitalWrite(D7, HIGH);                               // enable wireless receiver connection to battery charger
   ReadVolts();
   Imax = Ichrg;
@@ -17,12 +17,12 @@ int ParknCharge() {
     Serial.print(" Battery: "); Serial.print(Vbat);
     Serial.print(" Vdelta: "); Serial.println(Vchrg - Vbat);
 
-    if ((Idelta >= -Pcent) && (Idelta <= Pcent) && (Ichrg > 50)  && (Vdelta > 0))    // centered on loop case a
+    if ((Idelta >= -Pcent) && (Idelta <= Pcent) && (Ichrg > MinChrg)  && (Vdelta > 0))    // centered on loop case a
     {
       ChrgState = 'a';
     }
 
-    if ((Idelta >= -Pcent) && (Idelta <= Pcent) && (Ichrg < 500) && (Vdelta < 0))   // far from charging loop
+    if ((Idelta >= -Pcent) && (Idelta <= Pcent) && (Ichrg < MinChrg) && (Vdelta < 0))   // far from charging loop
     {
       ChrgState = 'b';
     }
@@ -32,7 +32,7 @@ int ParknCharge() {
       ChrgState = 'c';
     }
 
-    if ((Idelta >= Pcent) && (Ichrg > 50) && (Vdelta > 0))                         // approaching charging loop
+    if ((Idelta >= Pcent) && (Ichrg > MinChrg) && (Vdelta > 0))                         // approaching charging loop
     {
       ChrgState = 'd';
     }
@@ -51,8 +51,7 @@ int ParknCharge() {
         break;
 
       case 'b': {
-          if (Speed >= SpeedMax) {Speed = SpeedMax; }
-          if(Speed<SpeedMin){Speed=SpeedMax;}
+          if ((Speed >= SpeedMax) || (Speed<=SpeedMin)) {Speed = Slow1; }
           Serial.print(Speed);Serial.println(" far from loop");
         }
         break;
@@ -83,5 +82,6 @@ int ParknCharge() {
     Serial.print("Speed: "); Serial.println(Speed);
     analogWrite(MotorAspeed, Speed);
     Imax = Ichrg;
+    ServeInfo();
   }
 }
