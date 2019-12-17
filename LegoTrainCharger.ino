@@ -1,6 +1,6 @@
 /*
   Name:       LegoTrainCharger.ino
-  Created:    10/12/2019
+  Created:    12/14/2019
   Author:     Paul
 
 
@@ -8,13 +8,16 @@
   0.0       10/29/2019   initial release
   0.1       11/02/2019   version added
   0.2       11/07/2019   added ParknCharge clean up, added ADC conversion factors
+  0.3       12/14/2019   added access point web page
 */
 //******************* Defining  external librarys *********************************************************************//
+
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
 #include <Adafruit_ADS1015.h>
 
 // config setup
@@ -27,59 +30,65 @@
 
 const char* ssid = STASSID;
 const char* password = STAPSK;
+String AP_SSID="Lego";
+String AP_Password="LegoChugger";
 const int web_server_on = STA_WEB_SERVER_ON;
 const int serial_debug = STA_SERIAL_DEBUG_ON;
-Adafruit_ADS1115 ads(0x48);
-//  Adafruit_ADS1115 ads;  // Using the ADS1115 16-bit 4 channel A/D converter
 
-//******************* Define Pins, variable names, and constants ************************************************************//
-/*
-  NodeMCU pin #    Arduino IDE pin #
-  D0          16
-  D1          5
-  D2          4
-  D3          0
-  D4          2
-  D5          14
-  D6          12
-  D7          13
-  D8          15
-*/
-const int ChrgEn = 13;                              // pin to enable wireless charger, must be high charge battery and see current
+//AsyncWebServer server(80);
+//WiFiServer server(80);
+ESP8266WebServer server(80);
+
+Adafruit_ADS1115 ads(0x48);  // Using the ADS1115 16-bit 4 channel A/D converter
+
+/******************* Define Pins, variable names, and constants ************************************************************/
+/* NodeMCU pin #    Arduino IDE pin #
+  D0                16
+  D1                 5
+  D2                 4
+  D3                 0
+  D4                 2
+  D5                 14
+  D6                 12
+  D7                 13
+  D8                 15 */
+  
+const int Red_LED = 15;                             // pin to light Red LED, active high
+const int Yel_LED = 16;                             // pin to light Yellow LED, active high
 const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed and direction 5=D1, 0=D3
-const int MotorBspeed = 2; const int MotorBdir = 4;// Motor B pins for speed and direction 2=D4  4=D2
+const int MotorBspeed = 4; const int MotorBdir = 2; // Motor B pins for speed and direction 2=D4  4=D2
 
 int16_t adc0,  adc1, adc2, adc3;                   // define each A/D channel each 16 bit channel has range of +/- 6.144V (1 bit = 0.1875mV)
 float AD0, AD1, AD2, AD3;
-float Ichrg, Idelta, Imax;                         // charger current, change in charging current, temp max charge current (will not work if VbatPcent is int)
-int Vbat, Vchrg, Speed, Vdelta;                    // Battery volts, Charger voltage, Battery charge percent, motor speed, charger battery voltage delta
-int VbatPcent;
-const int Izero = 60; const float M = 1.1;         // constants
-float Pcent = 15;
-const int Track = 6000;                            // length of track in centimeters
-const int n = 5; const int Td = 5;                 // number of samples measurements and delay in mSec for each A/D channel
+float Ichrg, Idelta, Imax;                         // charger current, change in charging current, temp max charge current
+int Vbat, VbatPcent, Vchrg;                        // Battery volts, Battery charge percent, Charger voltage
+int Speed, Vdelta,IntIchrg;                        // motor speed, charger to battery voltage delta, interger of charger current
+float Pcent = 15;                                  // test amount used to check change Idelta change between measurements
+const int n = 10; const int Td = 50;               // number of samples measurements and delay in mSec for each A/D channel
 const float Rbat = 4.4002 ; const float Ramp = 1.45; // resistor divider ratios to scale A/D channel to battery and charger
 const float Rchrg = 4.4277;                        // voltage divider ratio to scale A/D channel to charger voltage
-const int VbatMax = 8600;                          // 100% state of charge battery voltage in mV (2 * 4.3)
-const int VbatMin = 6200;                          // 0% state of charge battery voltage in mV (2 * 3.1)
+const int VbatMax = 8750;                          // 100% state of charge battery voltage in mV (2 * 4.3)
+const int VbatMin = 6600;                          // 0% state of charge battery voltage in mV (2 * 3.1)
 const int MinChrg = 250;                           // minimum charging current needed to park
-const int FullCharge = 95;                         // percent amount considered fully charged
-const int LowCharge = 75;                          // percent amount to begin charging
-const int SpeedMax = 800;                         // PWM value for motor speed corresponding to 100% speed
-const int SpeedMin = 150;                           // PWM value for motor speed corresponding to 0% speed
-const int Slow1 = 300;                             // PWM value for motor speed to coarse locate charger loop
+const int FullCharge = 99;                         // percent of battery charge to complete charging
+const int LowCharge = 36;                          // percent of battery charge to start charge
+const int SpeedMax = 800;                          // PWM value for motor speed corresponding to 100% speed
+const int SpeedMin = 225;                          // PWM value for motor speed corresponding to 0% speed
+const int Slow1 = 375;                             // PWM value for motor speed for locating charger loop
 const long timeoutTime = 1200;
 char ChrgState;                                    // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
 bool Charged;                                      // variable to hold parked position
-bool Dir;
-
+bool Dir;                                          // Train direction 1= forward  0= reverse
+int ChargeState = false;                           // variable to hold command to charge battery
+int TrainState= true;                              // variable that holds state of train running or stopped  true=running
 String header;                                     //web server variables and state machine
 unsigned long currentTime = millis();
 unsigned long previousTime = 0;
 unsigned long StartLoop;
 String stateAspeed = "off";
 String stateAdir = "cw";
-WiFiServer server(80);
+bool Red_ledState = false;
+bool TrainGo;                                       // bit to allow running train
 
 void setup() {
   Wire.begin(D6, D5);                              // Wire.begin([SDA-Pin],[SCL-Pin]);
@@ -89,55 +98,167 @@ void setup() {
   while (!Serial);                                 // wait for serial port to connect. Needed for native USB port only
   pinMode(MotorAspeed, OUTPUT); pinMode(MotorAdir, OUTPUT);
   pinMode(MotorBspeed, OUTPUT); pinMode(MotorBdir, OUTPUT);
-  pinMode(ChrgEn, OUTPUT);
-  // Connect to Wi-Fi network with SSID and password
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(250);
-    Serial.print(".");
+  pinMode(Red_LED, OUTPUT);
+  pinMode(Yel_LED, OUTPUT);
+  digitalWrite(Red_LED, LOW);
+  digitalWrite(Yel_LED, LOW);
+
+/********************************************client WiFi connection properties****************************************************/
+/* 
+ Connect to Wi-Fi network with SSID and password
+ Serial.print("Connecting to ");
+ Serial.print(ssid);
+ WiFi.begin(ssid, password);
+ while (WiFi.status() != WL_CONNECTED) {
+   delay(250);
+  Serial.print(".");
   }
-  // Print local IP address and start web server
-  Serial.println("");
-  Serial.println("WiFi connected.");
+ Print local IP address and start web server
+ Serial.println("");
+ Serial.println("WiFi connected.");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
+*/
+/*******************************************************Access point WiFi connection properties**************************************************************/
+IPAddress local_IP(192,168,100,2);
+IPAddress gateway(192,168,100,1);
+IPAddress subnet(255,255,255,0);
+
+Serial.print("Setting soft-AP ... ");
+Serial.println(WiFi.softAP(AP_SSID,AP_Password) ? "Ready" : "Failed!");
+
+Serial.print("Setting access point configuration ... ");
+Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!");
+
+Serial.print("access point IP address = ");
+Serial.println(WiFi.softAPIP());
+Serial.println(WiFi.localIP());
+  
+  server.on ( "/", handleRoot );
+  server.on ( "/led=1", handleRoot); server.on ( "/led=0", handleRoot);
+  server.on ( "/Dir=1", handleRoot); server.on ( "/Dir=0", handleRoot);
+  server.on ( "/TrainGo=1", handleRoot); server.on ( "/TrainGo=0", handleRoot);
+  server.on ( "/inline", []() {
+    server.send ( 200, "text/plain", "this works as well" );
+  } );
+  server.onNotFound ( handleNotFound );  
+  server.begin();
+  
+Serial.println("HTTP server started");
+Serial.println("Setup Complete");
+}
+void loop() {
+ReadVolts();
+server.handleClient();
+
+// if ((VbatPcent <= LowCharge) || (ChargeState==1)) {
+//   Serial.println(VbatPcent);
+//     Charged = 0;
+//     ParknCharge(); }
+
+ if (TrainGo==1){ TrackTest();}
+     else{analogWrite(MotorBspeed,0); }
+
+//    MotorDrive();
+//  TrackTest();
 }
 
-void loop() {
+  void handleRoot(){
+  IntIchrg=int(Ichrg);                //convert Ichrg to Int, html page does not like displaying float variables
+  digitalWrite (Red_LED, server.arg("led").toInt());
+  Red_ledState = digitalRead(Red_LED);
+  digitalWrite (MotorBdir, server.arg("Dir").toInt());
+  Dir=digitalRead(MotorBdir);
 
-  // pseudo code TODO
-  // read the volts of the battery
-  // if volts is high
-  // operate train (what's our speed and direction)
-  // else
-  // do charge routine
-  // webserver handle loop (display data and buttons to speed/directly and charge command)
-  // ideas for hardware things --> led that has charge and instruction status (color?)?
 
-  if (serial_debug) {
-    Serial.print("Channel A0: "); Serial.print(adc0);
-    Serial.print(" Channel A1: "); Serial.print(adc1);
-    Serial.print(" Channel A2: "); Serial.print(adc2);
-    Serial.print(" Channel A3: "); Serial.println(adc3);
-    Serial.print("Charger current of "); Serial.print(Ichrg); Serial.println("mA");
-    Serial.print("Charger voltage: "); Serial.print(Vchrg);
-    Serial.print(" Battery voltage: "); Serial.print(Vbat);
-    Serial.print("mV @ "); Serial.print(VbatPcent); Serial.println("%");
+ /* Dynamically generate the charge now toggle link, based on its current state (on or off)*/
+
+   char GoTrain[80];
+    if (TrainGo) {
+    strcpy(GoTrain, "Train is running. <a href=\"/?TrainGo=0\">Stop</a>");
+  }
+  else {
+    strcpy(GoTrain, "Train is stopped. <a href=\"/?TrainGo=1\">Run</a>");
+  }
+  TrainGo=server.arg("TrainGo").toInt();
+    
+  char TrainDir[80];
+    if (Dir) {
+    strcpy(TrainDir, "Direction is reverse. <a href=\"/?Dir=0\">Forward</a>");
+  }
+  else {
+    strcpy(TrainDir, "Direction is forward. <a href=\"/?Dir=1\">Reverse</a>");
+  }
+    Dir=digitalRead(MotorBdir);
+
+
+   char ledText[80];
+    if (Red_ledState) {
+    strcpy(ledText, "Red LED is on. <a href=\"/?led=0\">Turn off</a>");
+  }
+  else {
+    strcpy(ledText, "Red LED is on. <a href=\"/?led=1\">Turn on</a>");
+  }
+  Red_ledState=digitalRead(Red_LED);
+  
+  char html[1000];
+  int sec = millis() / 1000;
+  int min = sec / 60;
+  int hr = min / 60;
+
+// HTML page to display on the web-server root address
+  snprintf ( html, 1000,
+
+"<html>\
+  <head>\
+    <meta http-equiv='refresh' content='3'/>\
+    <title>Bookery Lego Train WiFi</title>\
+    <style>\
+      body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; font-size: 1.5em; Color: #000000; }\
+      h1 { Color: #AA0000; }\
+    </style>\
+  </head>\
+  <body>\
+    <h1>Bookery Lego Train Station</h1>\
+    <p>Time since last charge: %02d:%02d:%02d</p>\
+    <p>Battery percent charge: %d%</p>\
+    <p>Battery milliVolts: %d%</p>\
+    <p>Charge current: %d%</p>\
+    <p>Train speed: %d%</p>\
+    <p>%s<p>\
+    <p>%s<p>\
+    <p>%s<p>\
+  </body>\
+</html>",
+
+    hr, min % 60, sec % 60,
+    VbatPcent,
+    Vbat,
+    IntIchrg,
+    Speed,
+    GoTrain,
+    TrainDir,
+    ledText
+);
+  server.send ( 200, "text/html", html );
+//  digitalWrite(LED_BUILTIN, 1);
+}
+
+void handleNotFound() {
+//  digitalWrite(LED_BUILTIN,0);
+  String message = "File Not Found\n\n";
+  message += "URI: ";
+  message += server.uri();
+  message += "\nMethod: ";
+  message += ( server.method() == HTTP_GET ) ? "GET" : "POST";
+  message += "\nArguments: ";
+  message += server.args();
+  message += "\n";
+
+  for ( uint8_t i = 0; i < server.args(); i++ ) {
+    message += " " + server.argName ( i ) + ": " + server.arg ( i ) + "\n";
   }
 
-  digitalWrite(ChrgEn, LOW);
-  //  TrackTest();
-  ServeInfo();
-  ReadVolts();
-  //  if (VbatPcent <=0){ ReadVolts();}
-  if (VbatPcent <= LowCharge) {
-    Serial.println(VbatPcent);
-    Charged = 0;
-    ParknCharge();
-  }
-  //     MotorDrive();
-  TrackTest();
+  server.send ( 404, "text/plain", message );
 }
