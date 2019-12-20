@@ -56,16 +56,16 @@ int ParknCharge() {
       case 'c': {
           //          Serial.println("moving away from loop");
           //          Serial.println(Dir);
-          if (Dir == HIGH) {
-            Dir = LOW;
+          if (MotorDir == HIGH) {
+            MotorDir = LOW;
             //          Serial.println("Reverse ");
             //          Serial.println(Dir);
           }
           else {
-            Dir = HIGH;
+            MotorDir = HIGH;
             //          Serial.println("Forward ");
           }
-          digitalWrite(MotorBdir, Dir);
+          digitalWrite(MotorBdir, MotorDir);
           //          Serial.println(Dir);
         }
         break;

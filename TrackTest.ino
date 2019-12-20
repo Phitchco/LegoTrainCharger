@@ -4,7 +4,7 @@ int TrackTest() {
 //  Serial.println(startTime);
  // while(VbatPcent>=LowCharge){
 //  ReadVolts();
-  digitalWrite(MotorBdir, Dir);
+  digitalWrite(MotorBdir, MotorDir);
     for (Speed = (Slow1); Speed <= Slow1; Speed += 5) {
       delay(100); analogWrite(MotorBspeed, Speed);}
     for (Speed = Slow1; Speed >= (Slow1); Speed -= 5) {

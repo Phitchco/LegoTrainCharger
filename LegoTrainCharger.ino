@@ -20,18 +20,17 @@
 #include <WiFiClient.h>
 #include <Adafruit_ADS1015.h>
 
+#include "config.h"
+
 // config setup
-#ifndef STASSID
-#define STASSID "unevilnetwork"
-#define STAPSK  "familylaundry"
 #define STA_WEB_SERVER_ON 1
 #define STA_SERIAL_DEBUG_ON 1
-#endif
 
-const char* ssid = STASSID;
-const char* password = STAPSK;
+const char* ssid = STASSID; // see config.h
+const char* password = STAPSK; // see config.h
 String AP_SSID="Lego";
 String AP_Password="LegoChugger";
+const int AP_CHANNEL = 4;
 const int web_server_on = STA_WEB_SERVER_ON;
 const int serial_debug = STA_SERIAL_DEBUG_ON;
 
@@ -52,7 +51,7 @@ Adafruit_ADS1115 ads(0x48);  // Using the ADS1115 16-bit 4 channel A/D converter
   D6                 12
   D7                 13
   D8                 15 */
-  
+
 const int Red_LED = 15;                             // pin to light Red LED, active high
 const int Yel_LED = 16;                             // pin to light Yellow LED, active high
 const int MotorAspeed = 5; const int MotorAdir = 0; // Motor A pins for speed and direction 5=D1, 0=D3
@@ -74,11 +73,11 @@ const int FullCharge = 99;                         // percent of battery charge 
 const int LowCharge = 36;                          // percent of battery charge to start charge
 const int SpeedMax = 800;                          // PWM value for motor speed corresponding to 100% speed
 const int SpeedMin = 225;                          // PWM value for motor speed corresponding to 0% speed
-const int Slow1 = 375;                             // PWM value for motor speed for locating charger loop
+const int Slow1 = 550;                             // PWM value for motor speed for locating charger loop
 const long timeoutTime = 1200;
 char ChrgState;                                    // define a character to contain state of charge current into battery: Zero, Increasing, Decreasing, Park
 bool Charged;                                      // variable to hold parked position
-bool Dir;                                          // Train direction 1= forward  0= reverse
+bool MotorDir = false;                             // Train direction 1= forward  0= reverse
 int ChargeState = false;                           // variable to hold command to charge battery
 int TrainState= true;                              // variable that holds state of train running or stopped  true=running
 String header;                                     //web server variables and state machine
@@ -104,8 +103,8 @@ void setup() {
   digitalWrite(Yel_LED, LOW);
 
 /********************************************client WiFi connection properties****************************************************/
-/* 
- Connect to Wi-Fi network with SSID and password
+
+ //Connect to Wi-Fi network with SSID and password
  Serial.print("Connecting to ");
  Serial.print(ssid);
  WiFi.begin(ssid, password);
@@ -113,20 +112,21 @@ void setup() {
    delay(250);
   Serial.print(".");
   }
- Print local IP address and start web server
+// Print local IP address and start web server
  Serial.println("");
  Serial.println("WiFi connected.");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
-  server.begin();
-*/
+
 /*******************************************************Access point WiFi connection properties**************************************************************/
+/*
+
 IPAddress local_IP(192,168,100,2);
 IPAddress gateway(192,168,100,1);
 IPAddress subnet(255,255,255,0);
 
 Serial.print("Setting soft-AP ... ");
-Serial.println(WiFi.softAP(AP_SSID,AP_Password) ? "Ready" : "Failed!");
+Serial.println(WiFi.softAP(AP_SSID,AP_Password, AP_CHANNEL) ? "Ready" : "Failed!");
 
 Serial.print("Setting access point configuration ... ");
 Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!");
@@ -134,7 +134,8 @@ Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!
 Serial.print("access point IP address = ");
 Serial.println(WiFi.softAPIP());
 Serial.println(WiFi.localIP());
-  
+*/
+
   server.on ( "/", handleRoot );
   server.on ( "/led=1", handleRoot); server.on ( "/led=0", handleRoot);
   server.on ( "/Dir=1", handleRoot); server.on ( "/Dir=0", handleRoot);
@@ -142,26 +143,30 @@ Serial.println(WiFi.localIP());
   server.on ( "/inline", []() {
     server.send ( 200, "text/plain", "this works as well" );
   } );
-  server.onNotFound ( handleNotFound );  
+  server.onNotFound ( handleNotFound );
   server.begin();
-  
-Serial.println("HTTP server started");
-Serial.println("Setup Complete");
+
+  Serial.println("HTTP server started");
+  Serial.println("Setup Complete");
+
 }
+
 void loop() {
-ReadVolts();
-server.handleClient();
+  ReadVolts();
+  server.handleClient();
 
-// if ((VbatPcent <= LowCharge) || (ChargeState==1)) {
-//   Serial.println(VbatPcent);
-//     Charged = 0;
-//     ParknCharge(); }
+  if (TrainGo==1){
+    TrackTest();
+   } else{
+      analogWrite(MotorBspeed,0);
+   }
+  // if ((VbatPcent <= LowCharge) || (ChargeState==1)) {
+  //   Serial.println(VbatPcent);
+  //     Charged = 0;
+  //     ParknCharge(); }
 
- if (TrainGo==1){ TrackTest();}
-     else{analogWrite(MotorBspeed,0); }
-
-//    MotorDrive();
-//  TrackTest();
+  //    MotorDrive();
+  //  TrackTest();
 }
 
   void handleRoot(){
@@ -169,28 +174,28 @@ server.handleClient();
   digitalWrite (Red_LED, server.arg("led").toInt());
   Red_ledState = digitalRead(Red_LED);
   digitalWrite (MotorBdir, server.arg("Dir").toInt());
-  Dir=digitalRead(MotorBdir);
+  MotorDir = digitalRead(MotorBdir);
 
 
  /* Dynamically generate the charge now toggle link, based on its current state (on or off)*/
 
-   char GoTrain[80];
-    if (TrainGo) {
+  char GoTrain[80];
+  if (TrainGo) {
     strcpy(GoTrain, "Train is running. <a href=\"/?TrainGo=0\">Stop</a>");
   }
   else {
     strcpy(GoTrain, "Train is stopped. <a href=\"/?TrainGo=1\">Run</a>");
   }
   TrainGo=server.arg("TrainGo").toInt();
-    
+
   char TrainDir[80];
-    if (Dir) {
+    if (MotorDir) {
     strcpy(TrainDir, "Direction is reverse. <a href=\"/?Dir=0\">Forward</a>");
   }
   else {
     strcpy(TrainDir, "Direction is forward. <a href=\"/?Dir=1\">Reverse</a>");
   }
-    Dir=digitalRead(MotorBdir);
+    MotorDir = digitalRead(MotorBdir);
 
 
    char ledText[80];
@@ -200,8 +205,8 @@ server.handleClient();
   else {
     strcpy(ledText, "Red LED is on. <a href=\"/?led=1\">Turn on</a>");
   }
-  Red_ledState=digitalRead(Red_LED);
-  
+  Red_ledState = digitalRead(Red_LED);
+
   char html[1000];
   int sec = millis() / 1000;
   int min = sec / 60;
@@ -209,10 +214,8 @@ server.handleClient();
 
 // HTML page to display on the web-server root address
   snprintf ( html, 1000,
-
 "<html>\
   <head>\
-    <meta http-equiv='refresh' content='3'/>\
     <title>Bookery Lego Train WiFi</title>\
     <style>\
       body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; font-size: 1.5em; Color: #000000; }\
@@ -242,11 +245,9 @@ server.handleClient();
     ledText
 );
   server.send ( 200, "text/html", html );
-//  digitalWrite(LED_BUILTIN, 1);
 }
 
 void handleNotFound() {
-//  digitalWrite(LED_BUILTIN,0);
   String message = "File Not Found\n\n";
   message += "URI: ";
   message += server.uri();
